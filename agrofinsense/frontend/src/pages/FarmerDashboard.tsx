@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from '../store';
-import { getRecommendation, getLivePrice } from '../api';
+import { getRecommendation, getLivePrice, getNdvi, getAlerts, getEnergy, getAqi } from '../api';
 import MetricCard from '../components/MetricCard';
 import LivePriceChart from '../components/LivePriceChart';
 import VoiceAdvisory from '../components/VoiceAdvisory';
+import AlertBanner from '../components/AlertBanner';
+import NewsWidget from '../components/NewsWidget';
 
 export default function FarmerDashboard() {
     const { farmer, selectedCrop, selectedDistrict, livePrices, addLivePrice, logout } = useStore();
@@ -25,6 +27,31 @@ export default function FarmerDashboard() {
         queryKey: ['livePrice', selectedCrop, selectedDistrict],
         queryFn: () => getLivePrice(selectedCrop, selectedDistrict),
         refetchInterval: 60000,
+    });
+
+    // New Data Hooks
+    const { data: ndvi } = useQuery({
+        queryKey: ['ndvi', selectedDistrict],
+        queryFn: () => getNdvi(selectedDistrict),
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: alerts } = useQuery({
+        queryKey: ['alertsRisk', selectedDistrict],
+        queryFn: () => getAlerts(selectedDistrict),
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: energy } = useQuery({
+        queryKey: ['energy', selectedDistrict],
+        queryFn: () => getEnergy(selectedDistrict),
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: aqi } = useQuery({
+        queryKey: ['aqi', selectedDistrict],
+        queryFn: () => getAqi(selectedDistrict),
+        staleTime: 5 * 60 * 1000,
     });
 
     // WebSocket for live prices
@@ -84,6 +111,8 @@ export default function FarmerDashboard() {
                 </div>
             </div>
 
+            <AlertBanner />
+
             {/* Metric Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <MetricCard
@@ -112,10 +141,36 @@ export default function FarmerDashboard() {
                     unit="eligible"
                     icon="📋"
                 />
+                {/* 4 New Metric Cards */}
+                <MetricCard
+                    label="Crop Health"
+                    value={ndvi?.health_label || '...'}
+                    unit={ndvi ? `(${(ndvi.health_index * 100).toFixed(0)}%)` : ''}
+                    icon="🌱"
+                />
+                <MetricCard
+                    label="Today's Weather Risk"
+                    value={alerts?.overall_risk ? alerts.overall_risk.toUpperCase() : '...'}
+                    icon={alerts?.overall_risk === 'high' ? '🚨' : alerts?.overall_risk === 'moderate' ? '⚠️' : '✅'}
+                />
+                <MetricCard
+                    label="Solar Potential"
+                    value={energy?.solar_potential || '...'}
+                    unit={energy ? `(${energy.est_solar_units_per_day_per_kw} kWh)` : ''}
+                    icon="☀️"
+                />
+                <MetricCard
+                    label="Air Quality"
+                    value={aqi?.aqi_label || '...'}
+                    unit={aqi?.crop_advice ? `(${aqi.crop_advice})` : ''}
+                    icon="💨"
+                />
             </div>
 
+            <NewsWidget />
+
             {/* Quick Actions */}
-            <div className="flex flex-wrap gap-3 mb-6">
+            <div className="flex flex-wrap gap-3 my-6">
                 {[
                     { label: '📄 Upload Soil', path: '/soil-upload' },
                     { label: '📊 Price Chart', path: '/prices' },

@@ -63,6 +63,23 @@ export const getMarketForecast = (crop: string, district: string) =>
 export const getAllCropsPrices = (district: string) =>
     api.get(`/market/all-crops/${district}`).then((r) => r.data);
 
+export const getNews = (crop: string) =>
+    api.get(`/market/news/${crop}`).then((r) => r.data);
+
+// --- Integrations ---
+export const getAlerts = (district: string) =>
+    api.get(`/farmer/alerts/${district}`).then((r) => r.data);
+
+export const getNdvi = (district: string) =>
+    api.get(`/farmer/ndvi/${district}`).then((r) => r.data);
+
+export const getEnergy = (district: string) =>
+    api.get(`/farmer/energy/${district}`).then((r) => r.data);
+
+export const getAqi = (district: string) =>
+    api.get(`/farmer/aqi/${district}`).then((r) => r.data);
+
+
 // --- GovTech ---
 export const getDistrictSummary = (district: string, season: string) =>
     api.get(`/govtech/district-summary/${district}/${season}`).then((r) => r.data);

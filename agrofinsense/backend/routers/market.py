@@ -45,3 +45,10 @@ async def all_crops_prices(district: str):
         latest = prices[0] if prices else {"mandi": "N/A", "price": 0, "date": "", "crop": crop}
         results.append(latest)
     return results
+
+
+@router.get("/news/{crop}")
+async def agri_news(crop: str):
+    from integrations.agri_news import get_agri_news
+    return await get_agri_news(crop)
+

@@ -6,9 +6,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+from sqlalchemy import text
 
 from routers import farmer, market, govtech, scheme, ws
 from integrations.ollama_ai import health_check as ollama_health
@@ -72,11 +75,13 @@ async def health():
     try:
         from db.models import SessionLocal
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db_ok = True
         db.close()
     except Exception:
         pass
+
+
 
     redis_ok = False
     try:

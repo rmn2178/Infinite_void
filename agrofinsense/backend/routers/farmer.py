@@ -228,3 +228,25 @@ async def voice_advisory(farmer_id: int, db: Session = Depends(get_db)):
         return Response(content=audio, media_type="audio/mpeg")
     else:
         return {"text": rec.why_narrative, "voice_available": False}
+
+
+@router.get("/ndvi/{district}")
+async def crop_health(district: str):
+    from integrations.ndvi_monitor import get_crop_health
+    return await get_crop_health(district)
+
+@router.get("/alerts/{district}")
+async def district_alerts(district: str):
+    from integrations.flood_alert import get_district_alerts
+    return await get_district_alerts(district)
+
+@router.get("/energy/{district}")
+async def energy_potential(district: str):
+    from integrations.energy_potential import get_energy_potential
+    return await get_energy_potential(district)
+
+@router.get("/aqi/{district}")
+async def air_quality(district: str):
+    from integrations.air_quality import get_aqi
+    return await get_aqi(district)
+
