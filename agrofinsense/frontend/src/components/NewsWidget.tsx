@@ -1,50 +1,43 @@
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
+import { THEME } from '../theme';
+import { LightCard, SandalCard } from './Cards';
 import { useStore } from '../store';
-import { getNews } from '../api';
+import { fetchAgriNews, NewsItem } from '../lib/externalApis';
 
-export default function NewsWidget() {
-    const { selectedCrop } = useStore();
+const MOCK_NEWS: NewsItem[] = [
+  { title: 'New MSP announced for Kharif crops', description: 'Govt increased MSP for major crops.', link: '#', pubDate: new Date().toISOString(), source: 'AgriNews India' },
+  { title: 'Monsoon expected to be normal this year', description: 'IMD forecasts above average rainfall.', link: '#', pubDate: new Date().toISOString(), source: 'Weather Today' },
+  { title: 'Fertilizer subsidies extended', description: 'DAP and Urea prices to remain stable.', link: '#', pubDate: new Date().toISOString(), source: 'Finance Daily' },
+  { title: 'Export ban on non-basmati rice lifted', description: 'Farmers cheer as prices expected to rise.', link: '#', pubDate: new Date().toISOString(), source: 'Trade News' }
+];
 
-    const { data: news, isLoading } = useQuery({
-        queryKey: ['news', selectedCrop],
-        queryFn: () => getNews(selectedCrop),
-        refetchInterval: 15 * 60 * 1000,
+export function NewsWidget({ crop }: { crop?: string }) {
+  const selectedCrop = useStore(s => s.selectedCrop);
+  const targetCrop = crop || selectedCrop;
+  const [news, setNews] = useState<NewsItem[]>(MOCK_NEWS);
+
+  useEffect(() => {
+    fetchAgriNews(targetCrop).then(res => {
+      if (res && res.length > 0) setNews(res.slice(0, 4));
     });
+  }, [targetCrop]);
 
-    return (
-        <div className="glass-card mt-6">
-            <h3 className="text-lg font-semibold text-white mb-4">📰 {selectedCrop} Market News</h3>
-            
-            {isLoading ? (
-                <div className="animate-pulse space-y-4">
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="h-20 bg-slate-800/50 rounded-lg"></div>
-                    ))}
-                </div>
-            ) : !news || news.length === 0 ? (
-                <p className="text-slate-400 text-sm">No recent news for {selectedCrop}. Check back later.</p>
-            ) : (
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                    {news.map((item: any, i: number) => (
-                        <a 
-                            key={i} 
-                            href={item.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="block p-3 bg-slate-800/30 rounded-lg hover:bg-slate-700/40 transition-colors border border-transparent hover:border-slate-600/50"
-                        >
-                            <h4 className="text-sm font-bold text-agro-100 mb-1 leading-tight">{item.title}</h4>
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-[10px] uppercase font-bold text-agro-500">{item.source}</span>
-                                <span className="text-[10px] text-slate-400">
-                                    {new Date(item.published).toLocaleDateString()}
-                                </span>
-                            </div>
-                            <p className="text-xs text-slate-300 line-clamp-2">{item.summary}</p>
-                        </a>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
+  return (
+    <LightCard>
+      <div style={{ color: THEME.jingleGreen, fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
+        📰 Agri News — {targetCrop}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {news.map((n, i) => (
+          <SandalCard key={i} style={{ padding: '12px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: THEME.jingleGreen, marginBottom: 4 }}>{n.title}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: THEME.mossDark }}>{n.source} • {new Date(n.pubDate).toLocaleDateString()}</span>
+              <a href={n.link} target="_blank" rel="noreferrer" style={{ color: THEME.emeraldDark, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>Read →</a>
+            </div>
+          </SandalCard>
+        ))}
+      </div>
+    </LightCard>
+  );
 }

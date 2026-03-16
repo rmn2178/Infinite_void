@@ -1,88 +1,50 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { THEME } from '../theme';
 import { useQuery } from '@tanstack/react-query';
-import { useStore } from '../store';
 import { getAlerts } from '../api';
+import { X, AlertTriangle } from 'lucide-react';
 
-interface Alert {
-    type: 'FLOOD' | 'DROUGHT' | 'HEATWAVE';
-    level: 'HIGH' | 'MODERATE' | 'LOW';
-    message: string;
-    date: string;
-}
+export function AlertBanner({ district }: { district: string }) {
+  const { data: alerts } = useQuery({ queryKey: ['alerts', district], queryFn: () => getAlerts(district), refetchInterval: 300000 });
+  const [dismissed, setDismissed] = useState<number[]>([]);
 
-export default function AlertBanner() {
-    const { selectedDistrict } = useStore();
-    const [hiddenAlerts, setHiddenAlerts] = useState<Set<string>>(new Set());
+  const activeAlerts = (alerts || []).filter((a: any) => !dismissed.includes(a.id));
 
-    const { data } = useQuery({
-        queryKey: ['alerts', selectedDistrict],
-        queryFn: () => getAlerts(selectedDistrict),
-        refetchInterval: 5 * 60 * 1000,
+  useEffect(() => {
+    activeAlerts.forEach((a: any) => {
+      if (a.level === 'LOW') {
+        const t = setTimeout(() => {
+          setDismissed(prev => [...prev, a.id]);
+        }, 5000);
+        return () => clearTimeout(t);
+      }
     });
+  }, [activeAlerts]);
 
-    const getStyles = (level: string) => {
-        switch (level) {
-            case 'HIGH':
-                return { bg: 'bg-red-500/10', border: 'border-l-4 border-red-500', text: 'text-red-300' };
-            case 'MODERATE':
-                return { bg: 'bg-amber-500/10', border: 'border-l-4 border-amber-500', text: 'text-amber-300' };
-            default:
-                return { bg: 'bg-yellow-500/10', border: 'border-l-4 border-yellow-500', text: 'text-yellow-300' };
-        }
-    };
+  if (!activeAlerts.length) return null;
 
-    const getIcon = (type: string) => {
-        switch (type) {
-            case 'FLOOD': return '🌊';
-            case 'DROUGHT': return '🌵';
-            case 'HEATWAVE': return '🌡️';
-            default: return '⚠️';
-        }
-    };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+      {activeAlerts.map((a: any) => {
+        const isHigh = a.level === 'HIGH';
+        const bg = isHigh ? THEME.danger + '15' : a.level === 'MODERATE' ? THEME.warning + '20' : THEME.lightSandal;
+        const color = isHigh ? THEME.danger : a.level === 'MODERATE' ? '#B9770E' : THEME.jingleGreen;
 
-    const alerts = data?.alerts || [];
-
-    // Auto-dismiss LOW alerts after 5 seconds
-    useEffect(() => {
-        const timeouts: number[] = [];
-        alerts.forEach((alert: Alert, i: number) => {
-            const id = `${alert.type}-${i}`;
-            if (alert.level === 'LOW' && !hiddenAlerts.has(id)) {
-                const t = window.setTimeout(() => {
-                    setHiddenAlerts(prev => new Set(prev).add(id));
-                }, 5000);
-                timeouts.push(t);
-            }
-        });
-        return () => timeouts.forEach(clearTimeout);
-    }, [alerts, hiddenAlerts]);
-
-    if (!alerts.length) return null;
-
-    return (
-        <div className="flex flex-col gap-2 w-full mb-6">
-            {alerts.map((alert: Alert, i: number) => {
-                const id = `${alert.type}-${i}`;
-                if (hiddenAlerts.has(id)) return null;
-                const s = getStyles(alert.level);
-                return (
-                    <div key={id} className={`${s.bg} ${s.border} rounded-r-xl p-4 flex items-center justify-between animate-slide-up`} id={`alert-${alert.level.toLowerCase()}`}>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl">{getIcon(alert.type)}</span>
-                            <span className={`text-sm font-medium ${s.text}`}>
-                                <strong>{alert.type} Alert:</strong> {alert.message} ({alert.date})
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => setHiddenAlerts(prev => new Set(prev).add(id))}
-                            className="px-3 py-1 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                        >
-                            Dismiss
-                        </button>
-                    </div>
-                );
-            })}
-        </div>
-    );
+        return (
+          <div key={a.id} style={{
+            background: bg, borderLeft: `4px solid ${color}`, borderRadius: 8, padding: '12px 16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'slide-in-right 0.3s ease'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <AlertTriangle size={18} color={color} />
+              <span style={{ color: THEME.darkJungle, fontSize: 13, fontWeight: 500 }}>{a.message}</span>
+            </div>
+            <button onClick={() => setDismissed(prev => [...prev, a.id])} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.mossDark, display: 'flex' }}>
+              <X size={16} />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
-

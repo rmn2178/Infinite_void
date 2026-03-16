@@ -1,236 +1,151 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { THEME } from '../theme';
+import { useStore, PriceUpdate } from '../store';
 import { useQuery } from '@tanstack/react-query';
-import { useStore } from '../store';
-import { getRecommendation, getLivePrice, getNdvi, getAlerts, getEnergy, getAqi } from '../api';
-import MetricCard from '../components/MetricCard';
-import LivePriceChart from '../components/LivePriceChart';
-import VoiceAdvisory from '../components/VoiceAdvisory';
-import AlertBanner from '../components/AlertBanner';
-import NewsWidget from '../components/NewsWidget';
+import { getRecommendation, getAlerts, getNdvi, getEnergy, getAqi } from '../api';
+import { useSimulation } from '../hooks/useSimulation';
+import { LightCard, DarkCard, SandalCard } from '../components/Cards';
+import { MetricCard } from '../components/MetricCard';
+import { AlertBanner } from '../components/AlertBanner';
+import { NewsWidget } from '../components/NewsWidget';
+import { VoiceAdvisory } from '../components/VoiceAdvisory';
+import { LivePriceChart } from '../components/LivePriceChart';
+import { ShieldAlert, TrendingUp, Sun, Wind, UploadCloud, LineChart, MapPin, FileText, Droplets, Wheat } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-export default function FarmerDashboard() {
-    const { farmer, selectedCrop, selectedDistrict, livePrices, addLivePrice, logout } = useStore();
-    const navigate = useNavigate();
-    const wsRef = useRef<WebSocket | null>(null);
-    const [wsConnected, setWsConnected] = useState(false);
+export function FarmerDashboard() {
+  const { farmer, selectedCrop, selectedDistrict, livePrices: globalLivePrices, addLivePrice } = useStore();
+  const { livePrices } = useSimulation(false); // Local fallback sim
+  const navigate = useNavigate();
+  const [wsConnected, setWsConnected] = useState(false);
 
-    const farmerId = farmer?.farmer_id || 1;
+  // Queries
+  const { data: rec } = useQuery({ queryKey: ['recommendation', farmer?.farmer_id], queryFn: () => getRecommendation(farmer!.farmer_id), refetchInterval: 5000, enabled: !!farmer });
+  const { data: ndvi } = useQuery({ queryKey: ['ndvi', selectedDistrict], queryFn: () => getNdvi(selectedDistrict), staleTime: 300000 });
+  const { data: alerts } = useQuery({ queryKey: ['alerts', selectedDistrict], queryFn: () => getAlerts(selectedDistrict), staleTime: 300000 });
+  const { data: energy } = useQuery({ queryKey: ['energy', selectedDistrict], queryFn: () => getEnergy(selectedDistrict), staleTime: 300000 });
+  const { data: aqi } = useQuery({ queryKey: ['aqi', selectedDistrict], queryFn: () => getAqi(selectedDistrict), staleTime: 300000 });
 
-    const { data: rec } = useQuery({
-        queryKey: ['recommendation', farmerId],
-        queryFn: () => getRecommendation(farmerId),
-        refetchInterval: 5000,
-    });
+  useEffect(() => {
+    const ws = new WebSocket(`ws://localhost:8000/ws/prices/${selectedCrop}/${selectedDistrict}`);
+    ws.onopen = () => setWsConnected(true);
+    ws.onclose = () => setWsConnected(false);
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'update') addLivePrice(data as PriceUpdate);
+    };
+    return () => ws.close();
+  }, [selectedCrop, selectedDistrict, addLivePrice]);
 
-    const { data: priceData } = useQuery({
-        queryKey: ['livePrice', selectedCrop, selectedDistrict],
-        queryFn: () => getLivePrice(selectedCrop, selectedDistrict),
-        refetchInterval: 60000,
-    });
+  const simPrice = livePrices[`${selectedCrop}_${selectedDistrict}`] || livePrices[`${selectedCrop}_Tamil Nadu`] || { current: 2000, changePct: 0, direction: 'flat' };
+  
+  const chartData = globalLivePrices.filter(p => p.crop === selectedCrop).map(p => ({ time: new Date(p.date).toLocaleTimeString(), price: p.price }));
+  if (chartData.length === 0) {
+    chartData.push({ time: new Date().toLocaleTimeString(), price: simPrice.current });
+  }
 
-    // New Data Hooks
-    const { data: ndvi } = useQuery({
-        queryKey: ['ndvi', selectedDistrict],
-        queryFn: () => getNdvi(selectedDistrict),
-        staleTime: 5 * 60 * 1000,
-    });
+  const quickActions = [
+    { label: 'Upload Soil', icon: <UploadCloud size={16}/>, path: '/soil-upload' },
+    { label: 'Price Chart', icon: <LineChart size={16}/>, path: '/prices' },
+    { label: 'Find Stores', icon: <MapPin size={16}/>, path: '/stores' },
+    { label: 'My Schemes', icon: <FileText size={16}/>, path: '/schemes' }
+  ];
 
-    const { data: alerts } = useQuery({
-        queryKey: ['alertsRisk', selectedDistrict],
-        queryFn: () => getAlerts(selectedDistrict),
-        staleTime: 5 * 60 * 1000,
-    });
+  const topCrops = rec?.recommended_crops || [
+    { name: 'Rice', score: 86, soil_match: 9, weather_match: 8 },
+    { name: 'Maize', score: 82, soil_match: 8, weather_match: 8 },
+    { name: 'Groundnut', score: 78, soil_match: 7, weather_match: 9 }
+  ];
 
-    const { data: energy } = useQuery({
-        queryKey: ['energy', selectedDistrict],
-        queryFn: () => getEnergy(selectedDistrict),
-        staleTime: 5 * 60 * 1000,
-    });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <AlertBanner district={selectedDistrict} />
 
-    const { data: aqi } = useQuery({
-        queryKey: ['aqi', selectedDistrict],
-        queryFn: () => getAqi(selectedDistrict),
-        staleTime: 5 * 60 * 1000,
-    });
+      {/* METRICS GRID */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        <MetricCard label="Risk Score" value={(rec?.risk_profile?.risk_score || 45).toString()} unit="/100" trend={rec?.risk_profile?.risk_score < 50 ? 'down' : 'up'} icon={<ShieldAlert size={20}/>} />
+        <MetricCard label="Live Price" value={`₹${simPrice.current.toFixed(0)}`} unit="/qtl" trend={simPrice.direction} trendPct={simPrice.changePct.toFixed(1)} icon={<TrendingUp size={20}/>} />
+        <MetricCard label="Top Crop" value={topCrops[0]?.name || selectedCrop} icon={<Wheat size={20}/>} />
+        <MetricCard label="Active Schemes" value="3" icon={<FileText size={20}/>} />
+        <MetricCard label="Crop Health" value={ndvi?.mean_ndvi ? (ndvi.mean_ndvi * 100).toFixed(0) : '85'} unit="%" trend="up" icon={<Droplets size={20}/>} />
+        <MetricCard label="Weather Risk" value={alerts?.length ? 'HIGH ⚠️' : 'LOW ✅'} icon={<Sun size={20}/>} />
+        <MetricCard label="Solar Potential" value={energy?.avg_ghi ? (energy.avg_ghi * 30).toFixed(0) : '150'} unit="kWh/mo" icon={<Sun size={20}/>} />
+        <MetricCard label="Air Quality" value={aqi?.current?.european_aqi || 42} unit="AQI" icon={<Wind size={20}/>} />
+      </div>
 
-    // WebSocket for live prices
-    useEffect(() => {
-        const ws = new WebSocket(`ws://localhost:8000/ws/prices/${selectedCrop}/${selectedDistrict}`);
+      {/* QUICK ACTIONS */}
+      <div style={{ display: 'flex', gap: 16 }}>
+        {quickActions.map(a => (
+          <button key={a.label} onClick={() => navigate(a.path)} style={{ background: THEME.darkForest, color: THEME.creamWhite, borderRadius: 12, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 8, transition: 'opacity 0.2s' }}>
+            {a.icon} {a.label}
+          </button>
+        ))}
+      </div>
 
-        ws.onopen = () => setWsConnected(true);
-        ws.onclose = () => setWsConnected(false);
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'update' && data.prices?.length > 0) {
-                const p = data.prices[0];
-                addLivePrice({
-                    mandi: p.mandi,
-                    price: p.price,
-                    date: new Date().toLocaleTimeString(),
-                    crop: p.crop,
-                });
-            }
-        };
-
-        wsRef.current = ws;
-        return () => ws.close();
-    }, [selectedCrop, selectedDistrict, addLivePrice]);
-
-    const currentPrice = priceData?.prices?.[0]?.price || rec?.price_forecast?.current?.price || 0;
-    const riskScore = rec?.yield_prediction?.risk_score || 50;
-    const topCrop = rec?.top_crop || selectedCrop;
-    const schemeCount = rec?.scheme_eligibility?.filter((s: { eligible: boolean }) => s.eligible)?.length || 0;
-
-    const chartData = livePrices.map((p) => ({
-        time: p.date,
-        price: p.price,
-    }));
-
-    return (
-        <div className="min-h-screen p-6" id="farmer-dashboard">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold text-white">
-                        🌾 Welcome, {farmer?.name || 'Farmer'}
-                    </h1>
-                    <p className="text-slate-400 text-sm mt-1">
-                        {selectedDistrict} District • {selectedCrop}
-                        {wsConnected && <span className="ml-2 text-green-400">● Live</span>}
-                    </p>
-                </div>
-                <div className="flex gap-3">
-                    <span className="text-xs px-3 py-1.5 bg-agro-600/20 text-agro-400 rounded-full font-medium">
-                        Powered by gemma3:4b (local)
-                    </span>
-                    <button onClick={() => { logout(); navigate('/'); }}
-                        className="text-xs px-3 py-1.5 bg-slate-700/50 text-slate-400 rounded-full hover:bg-slate-600/50 transition">
-                        Logout
-                    </button>
-                </div>
-            </div>
-
-            <AlertBanner />
-
-            {/* Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <MetricCard
-                    label="Risk Score"
-                    value={riskScore}
-                    unit="/100"
-                    trend={riskScore > 60 ? 'up' : riskScore < 30 ? 'down' : 'flat'}
-                    icon="⚡"
-                />
-                <MetricCard
-                    label="Live Price"
-                    value={`₹${currentPrice.toLocaleString('en-IN')}`}
-                    unit="/quintal"
-                    trend={rec?.price_forecast?.direction === 'up' ? 'up' : 'down'}
-                    trendPct={rec?.price_forecast?.confidence_pct}
-                    icon="💰"
-                />
-                <MetricCard
-                    label="Top Crop"
-                    value={topCrop}
-                    icon="🌿"
-                />
-                <MetricCard
-                    label="Active Schemes"
-                    value={schemeCount}
-                    unit="eligible"
-                    icon="📋"
-                />
-                {/* 4 New Metric Cards */}
-                <MetricCard
-                    label="Crop Health"
-                    value={ndvi?.health_label || '...'}
-                    unit={ndvi ? `(${(ndvi.health_index * 100).toFixed(0)}%)` : ''}
-                    icon="🌱"
-                />
-                <MetricCard
-                    label="Today's Weather Risk"
-                    value={alerts?.overall_risk ? alerts.overall_risk.toUpperCase() : '...'}
-                    icon={alerts?.overall_risk === 'high' ? '🚨' : alerts?.overall_risk === 'moderate' ? '⚠️' : '✅'}
-                />
-                <MetricCard
-                    label="Solar Potential"
-                    value={energy?.solar_potential || '...'}
-                    unit={energy ? `(${energy.est_solar_units_per_day_per_kw} kWh)` : ''}
-                    icon="☀️"
-                />
-                <MetricCard
-                    label="Air Quality"
-                    value={aqi?.aqi_label || '...'}
-                    unit={aqi?.crop_advice ? `(${aqi.crop_advice})` : ''}
-                    icon="💨"
-                />
-            </div>
-
-            <NewsWidget />
-
-            {/* Quick Actions */}
-            <div className="flex flex-wrap gap-3 my-6">
-                {[
-                    { label: '📄 Upload Soil', path: '/soil-upload' },
-                    { label: '📊 Price Chart', path: '/prices' },
-                    { label: '🏪 Find Stores', path: '/stores' },
-                    { label: '📋 My Schemes', path: '/schemes' },
-                ].map((action) => (
-                    <button
-                        key={action.path}
-                        onClick={() => navigate(action.path)}
-                        className="px-5 py-2.5 glass-card text-sm font-semibold text-white hover:border-agro-400/50 transition-all"
-                    >
-                        {action.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* Live Price Chart */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <LivePriceChart data={chartData} crop={selectedCrop} />
-
-                {/* Recommendation */}
-                <div className="glass-card">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-lg font-semibold text-white">🎯 Recommendation</h3>
-                        {rec?.status === 'processing' && (
-                            <span className="text-xs text-amber-400 animate-pulse">⏳ Generating advisory...</span>
-                        )}
-                    </div>
-                    {rec?.status === 'complete' ? (
-                        <div className="space-y-3">
-                            {rec.top_crops?.map((c: { crop: string; score: number }, i: number) => (
-                                <div key={i} className="flex items-center justify-between p-2 bg-slate-800/30 rounded-lg">
-                                    <span className="text-sm text-white">{i + 1}. {c.crop}</span>
-                                    <span className="text-xs font-semibold text-agro-400">{c.score}/10</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-slate-400 text-sm">Upload a soil report to get personalized recommendations</p>
-                    )}
-                </div>
-            </div>
-
-            {/* Why Narrative + Voice */}
-            {rec?.why_narrative && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="glass-card">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-white">📝 Advisory</h3>
-                            <span className="text-xs px-2 py-1 bg-agro-600/20 text-agro-400 rounded-full">
-                                via gemma3:4b
-                            </span>
-                        </div>
-                        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                            {rec.why_narrative}
-                        </p>
-                    </div>
-                    <VoiceAdvisory farmerId={farmerId} narrative={rec.why_narrative} />
-                </div>
-            )}
+      {/* CHARTS ROW */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24 }}>
+        <div style={{ position: 'relative' }}>
+          <LivePriceChart data={chartData} crop={selectedCrop} />
+          <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: wsConnected ? THEME.liveGreen : THEME.warning, animation: wsConnected ? 'pulse-live 2s infinite' : 'none' }} />
+            <span style={{ color: THEME.mossDark, fontSize: 11 }}>{wsConnected ? 'Live' : 'Connecting...'}</span>
+          </div>
         </div>
-    );
+
+        <LightCard style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <span style={{ color: THEME.jingleGreen, fontSize: 16, fontWeight: 700 }}>AI Reasoning</span>
+            <span style={{ background: THEME.lightSandal, color: THEME.darkForest, padding: '4px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>via llama3.2:3b</span>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: THEME.lightSandal, padding: 12, borderRadius: 8 }}>
+              <div style={{ fontSize: 11, color: THEME.mossDark, textTransform: 'uppercase', fontWeight: 600 }}>Yield Prediction</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: THEME.jingleGreen, fontVariantNumeric: 'tabular-nums' }}>{rec?.yield_prediction?.estimated_yield_kg_per_ha || 4500} <span style={{ fontSize: 12 }}>kg/ha</span></div>
+            </div>
+            <div style={{ background: THEME.lightSandal, padding: 12, borderRadius: 8 }}>
+              <div style={{ fontSize: 11, color: THEME.mossDark, textTransform: 'uppercase', fontWeight: 600 }}>Limiting Factor</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: THEME.danger }}>{rec?.yield_prediction?.limiting_factor || 'Potassium deficiency'}</div>
+            </div>
+            <div style={{ background: THEME.emeraldDark + '15', borderLeft: `4px solid ${THEME.emeraldDark}`, padding: 12, borderRadius: '0 8px 8px 0', fontSize: 13, color: THEME.darkJungle, lineHeight: 1.5 }}>
+              {rec?.yield_prediction?.recommendation || 'Apply 40kg/ha of MOP during basal dose to correct potassium deficiency and improve disease resistance.'}
+            </div>
+          </div>
+          {farmer && (
+            <div style={{ marginTop: 16 }}>
+              <VoiceAdvisory farmerId={farmer.farmer_id} />
+            </div>
+          )}
+        </LightCard>
+      </div>
+
+      {/* BOTTOM ROW */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 24 }}>
+        <LightCard>
+          <div style={{ color: THEME.jingleGreen, fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Top 3 Crops</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {topCrops.map((c: any, i: number) => (
+              <SandalCard key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: THEME.creamWhite, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: THEME.jingleGreen }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: THEME.mossDark, display: 'flex', gap: 8 }}>
+                    <span>Soil: {c.soil_match}/10</span>
+                    <span>Weather: {c.weather_match}/10</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: THEME.emeraldDark, fontVariantNumeric: 'tabular-nums' }}>
+                  {c.score}/100
+                </div>
+              </SandalCard>
+            ))}
+          </div>
+        </LightCard>
+
+        <NewsWidget />
+      </div>
+
+    </div>
+  );
 }

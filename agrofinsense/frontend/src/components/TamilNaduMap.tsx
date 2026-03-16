@@ -1,94 +1,80 @@
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
-import { useNavigate } from 'react-router-dom';
-import type { Feature, FeatureCollection } from 'geojson';
-import L from 'leaflet';
+import React, { useState } from 'react';
+import { THEME } from '../theme';
 
-interface DistrictData {
-    district: string;
-    tonnage_mt: number;
-    risk_score: number;
-    budget_crore: number;
+export interface HeatmapRow {
+  district: string;
+  tonnage_mt: number;
+  budget_cr: number;
+  risk_level: string;
 }
 
-interface TamilNaduMapProps {
-    data: DistrictData[];
-}
-
-// Simplified district polygons (approximate centroids expanded to small rectangles)
-const DISTRICT_FEATURES: FeatureCollection = {
-    type: 'FeatureCollection',
-    features: [
-        { type: 'Feature', properties: { name: 'Erode' }, geometry: { type: 'Polygon', coordinates: [[[77.4, 11.1], [78.0, 11.1], [78.0, 11.6], [77.4, 11.6], [77.4, 11.1]]] } },
-        { type: 'Feature', properties: { name: 'Salem' }, geometry: { type: 'Polygon', coordinates: [[[77.8, 11.4], [78.5, 11.4], [78.5, 11.9], [77.8, 11.9], [77.8, 11.4]]] } },
-        { type: 'Feature', properties: { name: 'Madurai' }, geometry: { type: 'Polygon', coordinates: [[[77.8, 9.7], [78.4, 9.7], [78.4, 10.2], [77.8, 10.2], [77.8, 9.7]]] } },
-        { type: 'Feature', properties: { name: 'Thanjavur' }, geometry: { type: 'Polygon', coordinates: [[[79.0, 10.5], [79.4, 10.5], [79.4, 11.0], [79.0, 11.0], [79.0, 10.5]]] } },
-        { type: 'Feature', properties: { name: 'Coimbatore' }, geometry: { type: 'Polygon', coordinates: [[[76.7, 10.8], [77.2, 10.8], [77.2, 11.2], [76.7, 11.2], [76.7, 10.8]]] } },
-        { type: 'Feature', properties: { name: 'Trichy' }, geometry: { type: 'Polygon', coordinates: [[[78.4, 10.5], [79.0, 10.5], [79.0, 11.0], [78.4, 11.0], [78.4, 10.5]]] } },
-        { type: 'Feature', properties: { name: 'Vellore' }, geometry: { type: 'Polygon', coordinates: [[[78.8, 12.6], [79.4, 12.6], [79.4, 13.1], [78.8, 13.1], [78.8, 12.6]]] } },
-        { type: 'Feature', properties: { name: 'Tirunelveli' }, geometry: { type: 'Polygon', coordinates: [[[77.4, 8.4], [78.0, 8.4], [78.0, 8.9], [77.4, 8.9], [77.4, 8.4]]] } },
-        { type: 'Feature', properties: { name: 'Chennai' }, geometry: { type: 'Polygon', coordinates: [[[80.0, 12.8], [80.4, 12.8], [80.4, 13.3], [80.0, 13.3], [80.0, 12.8]]] } },
-        { type: 'Feature', properties: { name: 'Tiruppur' }, geometry: { type: 'Polygon', coordinates: [[[77.1, 10.9], [77.6, 10.9], [77.6, 11.3], [77.1, 11.3], [77.1, 10.9]]] } },
-    ],
+const DISTRICT_POSITIONS: Record<string, { cx: number, cy: number }> = {
+  Chennai: { cx: 420, cy: 60 }, Vellore: { cx: 320, cy: 80 }, Tiruvallur: { cx: 390, cy: 90 },
+  Kancheepuram: { cx: 400, cy: 130 }, Krishnagiri: { cx: 290, cy: 120 }, Dharmapuri: { cx: 260, cy: 150 },
+  Salem: { cx: 280, cy: 190 }, Namakkal: { cx: 290, cy: 230 }, Erode: { cx: 230, cy: 210 },
+  Coimbatore: { cx: 200, cy: 260 }, Tiruppur: { cx: 240, cy: 265 }, Karur: { cx: 310, cy: 260 },
+  Nilgiris: { cx: 190, cy: 220 }, Trichy: { cx: 340, cy: 300 }, Thanjavur: { cx: 390, cy: 310 },
+  Dindigul: { cx: 260, cy: 320 }, Madurai: { cx: 300, cy: 360 }, Sivaganga: { cx: 360, cy: 370 },
+  Theni: { cx: 250, cy: 370 }, Virudhunagar: { cx: 320, cy: 400 }, Ramanathapuram: { cx: 390, cy: 410 },
+  Tirunelveli: { cx: 280, cy: 430 }, Thoothukudi: { cx: 330, cy: 450 }, Kanniyakumari: { cx: 280, cy: 500 },
 };
 
-function getColor(riskScore: number): string {
-    if (riskScore < 30) return '#22c55e';  // Green — low risk
-    if (riskScore < 60) return '#f59e0b';  // Amber — medium risk
-    return '#ef4444';                       // Red — high risk
-}
+export default function TamilNaduMap({ data, onDistrictClick }: { data: HeatmapRow[], onDistrictClick: (d: string) => void }) {
+  const [hovered, setHovered] = useState<HeatmapRow | null>(null);
 
-export default function TamilNaduMap({ data }: TamilNaduMapProps) {
-    const navigate = useNavigate();
+  const minTonnage = Math.min(...data.map(d => d.tonnage_mt), 0);
+  const maxTonnage = Math.max(...data.map(d => d.tonnage_mt), 1);
 
-    const dataMap = new Map(data.map((d) => [d.district, d]));
+  const getColor = (tonnage: number) => {
+    const ratio = maxTonnage === minTonnage ? 0 : (tonnage - minTonnage) / (maxTonnage - minTonnage);
+    if (ratio < 0.5) return THEME.warmSandal;
+    if (ratio < 0.8) return THEME.emeraldDark;
+    return THEME.darkForest;
+  };
 
-    const style = (feature: Feature | undefined) => {
-        const name = feature?.properties?.name || '';
-        const d = dataMap.get(name);
-        return {
-            fillColor: d ? getColor(d.risk_score) : '#64748b',
-            weight: 2,
-            opacity: 1,
-            color: 'rgba(255,255,255,0.3)',
-            fillOpacity: 0.6,
-        };
-    };
-
-    const onEach = (feature: Feature, layer: L.Layer) => {
-        const name = feature.properties?.name || '';
-        const d = dataMap.get(name);
-        const popupContent = d
-            ? `<strong>${name}</strong><br/>Tonnage: ${d.tonnage_mt.toLocaleString()} MT<br/>Budget: ₹${d.budget_crore} Cr<br/>Risk: ${d.risk_score}/100`
-            : `<strong>${name}</strong>`;
-
-        layer.bindTooltip(popupContent, { sticky: true });
-        layer.on('click', () => navigate(`/district/${name}`));
-    };
-
-    return (
-        <div className="glass-card h-[500px]" id="tamilnadu-map">
-            <h3 className="text-lg font-semibold text-white mb-3">🗺️ Tamil Nadu District Map</h3>
-            <MapContainer
-                center={[11.0, 78.5]}
-                zoom={7}
-                style={{ height: '420px', borderRadius: '12px' }}
-                scrollWheelZoom={false}
+  return (
+    <div style={{ position: 'relative', width: '100%', maxWidth: 500, margin: '0 auto', background: THEME.creamWhite, border: `1px solid ${THEME.deepSandal}`, borderRadius: 16, padding: 16 }}>
+      <svg viewBox="0 0 500 600" style={{ width: '100%', height: 'auto' }}>
+        {Object.entries(DISTRICT_POSITIONS).map(([dist, pos]) => {
+          const row = data.find(d => d.district === dist) || { district: dist, tonnage_mt: 0, budget_cr: 0, risk_level: 'Unknown' };
+          const color = getColor(row.tonnage_mt);
+          return (
+            <g 
+              key={dist} 
+              transform={`translate(${pos.cx}, ${pos.cy})`}
+              onMouseEnter={() => setHovered(row)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => onDistrictClick(dist)}
+              style={{ cursor: 'pointer' }}
             >
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                />
-                <GeoJSON
-                    data={DISTRICT_FEATURES}
-                    style={style}
-                    onEachFeature={onEach}
-                />
-            </MapContainer>
-            <div className="flex gap-4 mt-3 text-xs text-slate-400">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500" /> Low Risk</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500" /> Medium</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" /> High Risk</span>
-            </div>
+              <circle r={22} fill={color} stroke={THEME.creamWhite} strokeWidth={2} style={{ transition: 'fill 0.3s' }} />
+              <text y={4} textAnchor="middle" fill={color === THEME.darkForest || color === THEME.emeraldDark ? THEME.creamWhite : THEME.darkJungle} fontSize={9} fontWeight={600} pointerEvents="none">
+                {dist.substring(0, 5)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      
+      {/* Legend */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+        <span style={{ fontSize: 11, color: THEME.mossDark }}>Low Yield</span>
+        <div style={{ width: 120, height: 8, background: `linear-gradient(to right, ${THEME.warmSandal}, ${THEME.emeraldDark}, ${THEME.darkForest})`, borderRadius: 4 }} />
+        <span style={{ fontSize: 11, color: THEME.mossDark }}>High Yield</span>
+      </div>
+
+      {/* Tooltip */}
+      {hovered && (
+        <div style={{
+          position: 'absolute', top: 16, left: 16, background: THEME.nearBlack, color: THEME.creamWhite,
+          padding: '12px 16px', borderRadius: 8, pointerEvents: 'none', zIndex: 10, border: `1px solid ${THEME.emeraldDark}`
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: THEME.jingleGreen }}>{hovered.district}</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>Tonnage: <span style={{ color: THEME.warmSandal }}>{hovered.tonnage_mt.toLocaleString()} MT</span></div>
+          <div style={{ fontSize: 12 }}>Budget: <span style={{ color: THEME.warmSandal }}>₹{hovered.budget_cr} Cr</span></div>
+          <div style={{ fontSize: 12 }}>Risk: <span style={{ color: hovered.risk_level === 'High' ? THEME.liveRed : THEME.liveGreen }}>{hovered.risk_level}</span></div>
         </div>
-    );
+      )}
+    </div>
+  );
 }

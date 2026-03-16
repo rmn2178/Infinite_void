@@ -1,38 +1,41 @@
+import React from 'react';
+import { THEME } from '../theme';
+import { LightCard } from './Cards';
+
 interface MetricCardProps {
-    label: string;
-    value: string | number;
-    unit?: string;
-    trend?: 'up' | 'down' | 'flat';
-    trendPct?: number;
-    colour?: string;
-    icon?: string;
+  label: string;
+  value: string | number;
+  unit?: string;
+  trend?: 'up' | 'down' | 'flat';
+  trendPct?: string | number;
+  icon: React.ReactNode;
 }
 
-export default function MetricCard({ label, value, unit, trend, trendPct, colour = 'agro', icon }: MetricCardProps) {
-    const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
-    const trendColor = trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-yellow-400';
-
-    const borderColor = colour === 'gov' ? 'border-gov-500/30 hover:border-gov-400/50' : 'border-agro-500/30 hover:border-agro-400/50';
-    const glowColor = colour === 'gov' ? 'hover:shadow-gov-500/10' : 'hover:shadow-agro-500/10';
-
-    return (
-        <div className={`glass-card ${borderColor} ${glowColor} group cursor-default`} id={`metric-${label.toLowerCase().replace(/\s/g, '-')}`}>
-            <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</span>
-                {icon && <span className="text-xl">{icon}</span>}
-            </div>
-            <div className="flex items-end gap-2">
-                <span className="text-3xl font-bold text-white group-hover:text-agro-300 transition-colors">
-                    {typeof value === 'number' ? value.toLocaleString('en-IN') : value}
-                </span>
-                {unit && <span className="text-sm text-slate-400 mb-1">{unit}</span>}
-            </div>
-            {trend && (
-                <div className={`flex items-center gap-1 mt-2 text-sm ${trendColor}`}>
-                    <span className="font-semibold">{trendIcon}</span>
-                    {trendPct !== undefined && <span>{trendPct}%</span>}
-                </div>
-            )}
+export function MetricCard({ label, value, unit, trend, trendPct, icon }: MetricCardProps) {
+  return (
+    <LightCard style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: THEME.mossDark, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>{label}</span>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: THEME.lightSandal, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.darkForest }}>
+          {icon}
         </div>
-    );
+      </div>
+      <div style={{ flex: 1 }} />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
+        <span style={{ fontSize: 28, fontWeight: 700, color: THEME.jingleGreen, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        {unit && <span style={{ fontSize: 12, color: THEME.mossDark }}>{unit}</span>}
+      </div>
+      {trend && (
+        <div style={{ marginTop: 8 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 700,
+            background: trend === 'up' ? THEME.liveGreen + '20' : trend === 'down' ? THEME.liveRed + '20' : THEME.warmSandal,
+            color: trend === 'up' ? THEME.liveGreen : trend === 'down' ? THEME.liveRed : THEME.mossDark
+          }}>
+            {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '▬'} {trendPct && `${trendPct}%`}
+          </span>
+        </div>
+      )}
+    </LightCard>
+  );
 }

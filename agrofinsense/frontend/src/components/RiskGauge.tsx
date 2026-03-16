@@ -1,92 +1,41 @@
-import { useEffect, useRef } from 'react';
+import React from 'react';
+import { THEME } from '../theme';
 
-interface RiskGaugeProps {
-    score: number;
-    size?: number;
-    label?: string;
-}
+export function RiskGauge({ score, label }: { score: number; label: string }) {
+  const getScoreColor = (s: number) => {
+    if (s < 40) return THEME.liveGreen;
+    if (s < 70) return THEME.warning;
+    return THEME.danger;
+  };
 
-export default function RiskGauge({ score, size = 200, label = 'Risk Score' }: RiskGaugeProps) {
-    const canvasRef = useRef<SVGSVGElement>(null);
-    const clampedScore = Math.max(0, Math.min(100, score));
+  const percentage = Math.min(Math.max(score, 0), 100);
+  const radius = 80;
+  const circumference = Math.PI * radius; // Half circle
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
-    const getColor = (s: number) => {
-        if (s < 30) return '#22c55e';
-        if (s < 60) return '#f59e0b';
-        return '#ef4444';
-    };
-
-    const getRiskLabel = (s: number) => {
-        if (s < 30) return 'Low';
-        if (s < 60) return 'Medium';
-        return 'High';
-    };
-
-    const color = getColor(clampedScore);
-    const riskLabel = getRiskLabel(clampedScore);
-
-    // SVG semicircle gauge
-    const radius = 80;
-    const circumference = Math.PI * radius;
-    const offset = circumference - (clampedScore / 100) * circumference;
-
-    return (
-        <div className="flex flex-col items-center" id="risk-gauge">
-            <svg
-                ref={canvasRef}
-                width={size}
-                height={size * 0.65}
-                viewBox="0 0 200 130"
-            >
-                {/* Background arc */}
-                <path
-                    d="M 20 120 A 80 80 0 0 1 180 120"
-                    fill="none"
-                    stroke="rgba(148,163,184,0.15)"
-                    strokeWidth="16"
-                    strokeLinecap="round"
-                />
-                {/* Filled arc */}
-                <path
-                    d="M 20 120 A 80 80 0 0 1 180 120"
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="16"
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={offset}
-                    style={{
-                        transition: 'stroke-dashoffset 1.5s ease-out, stroke 0.5s',
-                        filter: `drop-shadow(0 0 8px ${color}40)`,
-                    }}
-                />
-                {/* Score text */}
-                <text
-                    x="100"
-                    y="100"
-                    textAnchor="middle"
-                    fill={color}
-                    fontSize="36"
-                    fontWeight="bold"
-                    fontFamily="Inter, sans-serif"
-                >
-                    {clampedScore}
-                </text>
-                <text
-                    x="100"
-                    y="122"
-                    textAnchor="middle"
-                    fill="#94a3b8"
-                    fontSize="12"
-                    fontFamily="Inter, sans-serif"
-                >
-                    {riskLabel}
-                </text>
-                {/* Scale labels */}
-                <text x="15" y="128" fill="#64748b" fontSize="10" fontFamily="Inter">0</text>
-                <text x="180" y="128" fill="#64748b" fontSize="10" fontFamily="Inter">100</text>
-            </svg>
-            <span className="text-xs text-slate-400 mt-1 font-medium">{label}</span>
+  return (
+    <div style={{ textAlign: 'center', position: 'relative', width: '100%' }}>
+      <svg viewBox="0 0 200 120" style={{ width: '100%', maxWidth: 200, display: 'block', margin: '0 auto' }}>
+        {/* Background Arc */}
+        <path d={`M 20 100 A ${radius} ${radius} 0 0 1 180 100`} fill="none" stroke={THEME.warmSandal} strokeWidth="16" strokeLinecap="round" />
+        {/* Foreground Arc */}
+        <path 
+          d={`M 20 100 A ${radius} ${radius} 0 0 1 180 100`} 
+          fill="none" 
+          stroke={getScoreColor(score)} 
+          strokeWidth="16" 
+          strokeLinecap="round" 
+          strokeDasharray={circumference} 
+          strokeDashoffset={strokeDashoffset} 
+          style={{ transition: 'stroke-dashoffset 1s ease-out, stroke 1s ease' }} 
+        />
+      </svg>
+      <div style={{ position: 'absolute', top: 55, left: 0, right: 0 }}>
+        <div style={{ fontSize: 36, fontWeight: 700, color: THEME.jingleGreen, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+          {score.toFixed(0)}
         </div>
-    );
+        <div style={{ fontSize: 12, color: THEME.mossDark, marginTop: 4 }}>{label}</div>
+      </div>
+    </div>
+  );
 }

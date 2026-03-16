@@ -1,0 +1,18 @@
+export const THEME = {
+  darkForest:  '#1B4332',
+  warmSandal:  '#E6CCB2',
+  emeraldDark: '#2D6A4F',
+  deepSandal:  '#DDB892',
+  lightSandal: '#EDE0D4',
+  darkJungle:  '#132A13',
+  nearBlack:   '#0B1C15',
+  creamWhite:  '#F5EBE0',
+  mossDark:    '#52796F',
+  jingleGreen: '#1B4332',
+  earthSandal: '#B08968',
+  success:     '#2D6A4F',
+  warning:     '#DDB892',
+  danger:      '#C0392B',
+  liveGreen:   '#27AE60',
+  liveRed:     '#E74C3C',
+};

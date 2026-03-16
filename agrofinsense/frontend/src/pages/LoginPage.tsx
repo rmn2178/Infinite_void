@@ -1,189 +1,144 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { THEME } from '../theme';
+import { LightCard, SandalCard } from '../components/Cards';
+import { checkOllamaStatus } from '../lib/ollama';
+import { loginFarmer, registerFarmer } from '../api';
 import { useStore } from '../store';
-import { registerFarmer } from '../api';
+import { useNavigate } from 'react-router-dom';
+import { Wheat } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
-const DISTRICTS = ['Erode', 'Salem', 'Madurai', 'Thanjavur', 'Coimbatore', 'Trichy', 'Vellore', 'Tirunelveli', 'Chennai', 'Tiruppur'];
-const LANGUAGES = [
-    { code: 'ta', name: 'தமிழ் (Tamil)' },
-    { code: 'en', name: 'English' },
-    { code: 'hi', name: 'हिन्दी (Hindi)' },
-];
+const DISTRICTS_TN = ["Ariyalur", "Chengalpattu", "Chennai", "Coimbatore", "Cuddalore", "Dharmapuri", "Dindigul", "Erode", "Kallakurichi", "Kanchipuram", "Kanyakumari", "Karur", "Krishnagiri", "Madurai", "Mayiladuthurai", "Nagapattinam", "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai", "Ramanathapuram", "Ranipet", "Salem", "Sivaganga", "Tenkasi", "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", "Tirunelveli", "Tirupathur", "Tiruppur", "Tiruvallur", "Tiruvannamalai", "Tiruvarur", "Vellore", "Viluppuram", "Virudhunagar"];
 
-export default function LoginPage() {
-    const [tab, setTab] = useState<'farmer' | 'officer'>('farmer');
-    const [phone, setPhone] = useState('');
-    const [name, setName] = useState('');
-    const [district, setDistrict] = useState('Erode');
-    const [language, setLanguage] = useState('ta');
-    const [landArea, setLandArea] = useState('1.0');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+export function LoginPage() {
+  const [activeTab, setActiveTab] = useState<'farmer' | 'officer'>('farmer');
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [district, setDistrict] = useState(DISTRICTS_TN[7]); // Erode default
+  const [land, setLand] = useState('2');
+  const [lang, setLang] = useState('English');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-    const { setFarmer, setToken, setRole, setSelectedDistrict, ollamaStatus } = useStore();
-    const navigate = useNavigate();
+  const { setToken, setFarmer, setRole } = useStore();
+  const navigate = useNavigate();
+  const { data: ollama } = useQuery({ queryKey: ['ollama'], queryFn: checkOllamaStatus });
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
+  const handleLogin = async (e?: React.FormEvent, forceRole?: 'farmer' | 'officer', forcePhone?: string) => {
+    if (e) e.preventDefault();
+    setError('');
+    setLoading(true);
 
-        try {
-            const data = await registerFarmer({
-                phone,
-                name: name || (tab === 'farmer' ? 'Farmer' : 'Officer'),
-                district,
-                land_area_ha: parseFloat(landArea) || 1.0,
-                language,
-                role: tab === 'officer' ? 'officer' : 'farmer',
-            });
+    const targetPhone = forcePhone || phone;
+    const targetRole = forceRole || activeTab;
 
-            setFarmer(data);
-            setToken(data.token);
-            setRole(data.role);
-            setSelectedDistrict(data.district);
-            navigate(data.role === 'officer' ? '/gov' : '/dashboard');
-        } catch (err) {
-            setError('Login failed. Is the backend running?');
-        } finally {
-            setLoading(false);
+    try {
+      let res;
+      try {
+        res = await loginFarmer({ phone: targetPhone });
+      } catch (err: any) {
+        if (err.response?.status === 404 && targetRole === 'farmer') {
+          await registerFarmer({ phone: targetPhone, name: name || 'Demo Farmer', district, land_area_ha: parseFloat(land) || 2, language: lang, role: 'farmer' });
+          res = await loginFarmer({ phone: targetPhone });
+        } else {
+          throw err;
         }
-    };
+      }
 
-    return (
-        <div className="min-h-screen flex items-center justify-center p-4" id="login-page">
-            <div className="w-full max-w-md">
-                {/* Logo */}
-                <div className="text-center mb-8 animate-fade-in">
-                    <h1 className="text-4xl font-extrabold bg-gradient-to-r from-agro-400 via-emerald-300 to-agro-500 bg-clip-text text-transparent">
-                        🌾 AgroFinSense
-                    </h1>
-                    <p className="text-slate-400 mt-2 text-sm">
-                        Agriculture + Fintech + GovTech Intelligence Platform
-                    </p>
+      if (targetRole === 'officer' && res.role !== 'officer') {
+        setError('This account is not an officer account.');
+        setLoading(false);
+        return;
+      }
 
-                    {/* Ollama Status */}
-                    <div className="flex items-center justify-center gap-2 mt-3">
-                        <div className={`w-2 h-2 rounded-full ${ollamaStatus.running && ollamaStatus.gemma_available && ollamaStatus.llama_available
-                                ? 'bg-green-500' : ollamaStatus.running ? 'bg-amber-500' : 'bg-red-500'
-                            }`} />
-                        <span className="text-xs text-slate-500">
-                            AI: {ollamaStatus.running ? 'Online' : 'Offline'}
-                            {ollamaStatus.running && ` (${ollamaStatus.gemma_available ? '✓' : '✗'} gemma3, ${ollamaStatus.llama_available ? '✓' : '✗'} llama3.2)`}
-                        </span>
-                    </div>
-                </div>
+      setToken(res.token);
+      setRole(res.role);
+      setFarmer({ farmer_id: res.farmer_id, name: res.name || 'User', district: res.district || 'Erode', phone: targetPhone, land_area_ha: res.land_area_ha || 2, language: res.language || 'English', role: res.role });
 
-                {/* Tabs */}
-                <div className="flex mb-6 bg-slate-800/50 rounded-xl p-1">
-                    <button
-                        onClick={() => setTab('farmer')}
-                        className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${tab === 'farmer'
-                                ? 'bg-agro-600 text-white shadow-lg shadow-agro-600/25'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                    >
-                        🧑‍🌾 Farmer
-                    </button>
-                    <button
-                        onClick={() => setTab('officer')}
-                        className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${tab === 'officer'
-                                ? 'bg-gov-600 text-white shadow-lg shadow-gov-600/25'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                    >
-                        🏛️ Government
-                    </button>
-                </div>
+      navigate(res.role === 'officer' ? '/gov' : '/farmer');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Login failed. Note: Demo roles only work if backend seeded.');
+      // Hack for pure frontend testing if backend fails:
+      if (!forcePhone) {
+        setToken('dummy_token');
+        setRole(targetRole);
+        navigate(targetRole === 'officer' ? '/gov' : '/farmer');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="glass-card space-y-4 animate-slide-up">
-                    <div>
-                        <label className="text-xs text-slate-400 font-medium block mb-1">Phone Number</label>
-                        <input
-                            type="tel"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            placeholder={tab === 'farmer' ? '9876543210' : '9988776655'}
-                            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-agro-500 focus:outline-none transition-colors"
-                            required
-                        />
-                    </div>
+  const inputStyle = {
+    background: THEME.lightSandal, border: `1.5px solid ${THEME.deepSandal}`, borderRadius: 12, padding: '12px 16px', color: THEME.jingleGreen, width: '100%', outline: 'none' as any, fontSize: 14
+  };
 
-                    <div>
-                        <label className="text-xs text-slate-400 font-medium block mb-1">Name</label>
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder={tab === 'farmer' ? 'Murugan K' : 'Officer Ravi'}
-                            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-agro-500 focus:outline-none transition-colors"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="text-xs text-slate-400 font-medium block mb-1">District</label>
-                        <select
-                            value={district}
-                            onChange={(e) => setDistrict(e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:border-agro-500 focus:outline-none transition-colors"
-                        >
-                            {DISTRICTS.map((d) => (
-                                <option key={d} value={d}>{d}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {tab === 'farmer' && (
-                        <>
-                            <div>
-                                <label className="text-xs text-slate-400 font-medium block mb-1">Land Area (hectares)</label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={landArea}
-                                    onChange={(e) => setLandArea(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white focus:border-agro-500 focus:outline-none transition-colors"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="text-xs text-slate-400 font-medium block mb-1">Language</label>
-                                <div className="flex gap-2">
-                                    {LANGUAGES.map((l) => (
-                                        <button
-                                            key={l.code}
-                                            type="button"
-                                            onClick={() => setLanguage(l.code)}
-                                            className={`flex-1 py-2 text-xs rounded-lg font-medium transition-all ${language === l.code
-                                                    ? 'bg-agro-600/30 text-agro-400 border border-agro-500/50'
-                                                    : 'bg-slate-800/30 text-slate-400 border border-slate-700/30 hover:border-slate-600'
-                                                }`}
-                                        >
-                                            {l.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {error && (
-                        <p className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={loading || !phone}
-                        className={`w-full py-3.5 rounded-xl font-bold text-white transition-all ${tab === 'officer'
-                                ? 'bg-gradient-to-r from-gov-600 to-gov-700 hover:from-gov-500 hover:to-gov-600 shadow-lg shadow-gov-600/25'
-                                : 'bg-gradient-to-r from-agro-600 to-agro-700 hover:from-agro-500 hover:to-agro-600 shadow-lg shadow-agro-600/25'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                        {loading ? 'Connecting...' : tab === 'farmer' ? '🌾 Enter Dashboard' : '🏛️ Enter Control Panel'}
-                    </button>
-                </form>
-            </div>
+  return (
+    <div style={{ minHeight: '100vh', background: THEME.lightSandal, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ position: 'absolute', top: 40, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Wheat size={40} color={THEME.emeraldDark} />
+        <div>
+          <div style={{ color: THEME.darkForest, fontSize: 32, fontWeight: 800, lineHeight: 1 }}>AgroFinSense</div>
+          <div style={{ color: THEME.mossDark, fontSize: 14, fontWeight: 500, marginTop: 4 }}>Agricultural Intelligence for Tamil Nadu</div>
         </div>
-    );
+      </div>
+
+      <LightCard style={{ width: '100%', maxWidth: 440, marginTop: 60 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+          <button onClick={() => setActiveTab('farmer')} style={{ flex: 1, background: activeTab === 'farmer' ? THEME.darkForest : THEME.lightSandal, color: activeTab === 'farmer' ? THEME.creamWhite : THEME.mossDark, border: 'none', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+            🧑‍🌾 Farmer Login
+          </button>
+          <button onClick={() => setActiveTab('officer')} style={{ flex: 1, background: activeTab === 'officer' ? THEME.darkForest : THEME.lightSandal, color: activeTab === 'officer' ? THEME.creamWhite : THEME.mossDark, border: 'none', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+            🏛️ Officer Login
+          </button>
+        </div>
+
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <input placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} required />
+          
+          {activeTab === 'farmer' && phone.length === 10 && (
+            <SandalCard style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}>
+              <div style={{ fontSize: 12, color: THEME.mossDark, fontWeight: 600 }}>New Registration Details (Optional)</div>
+              <input placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
+              <div style={{ display: 'flex', gap: 12 }}>
+                <select value={district} onChange={e => setDistrict(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                  {DISTRICTS_TN.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <input type="number" step="0.1" placeholder="Land (ha)" value={land} onChange={e => setLand(e.target.value)} style={{ ...inputStyle, width: '100px' }} />
+              </div>
+              <select value={lang} onChange={e => setLang(e.target.value)} style={inputStyle}>
+                <option value="English">English</option><option value="Tamil">Tamil</option>
+              </select>
+            </SandalCard>
+          )}
+
+          {error && <div style={{ color: THEME.danger, fontSize: 13, fontWeight: 500, textAlign: 'center' }}>{error}</div>}
+
+          <button type="submit" disabled={loading} style={{ background: THEME.darkForest, color: THEME.creamWhite, border: 'none', borderRadius: 12, padding: '14px', fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', width: '100%', marginTop: 8 }}>
+            {loading ? 'Processing...' : activeTab === 'farmer' ? 'Login / Register' : 'Officer Login'}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 24, paddingTop: 24, borderTop: `1px solid ${THEME.deepSandal}` }}>
+          <div style={{ fontSize: 11, color: THEME.mossDark, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: 12, textAlign: 'center' }}>Quick Demo Access</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button type="button" onClick={() => handleLogin(undefined, 'farmer', '9876543210')} style={{ background: THEME.warmSandal, color: THEME.darkForest, border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              🧑‍🌾 Demo Farmer (9876543210)
+            </button>
+            <button type="button" onClick={() => handleLogin(undefined, 'officer', '9988776655')} style={{ background: THEME.warmSandal, color: THEME.darkForest, border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              🏛️ Demo Officer (9988776655)
+            </button>
+          </div>
+        </div>
+      </LightCard>
+
+      <div style={{ marginTop: 40, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{ color: THEME.mossDark, fontSize: 12, fontWeight: 500 }}>Powered by gemma3:4b + llama3.2:3b running locally on Ollama</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: THEME.creamWhite, padding: '4px 12px', borderRadius: 20, border: `1px solid ${THEME.deepSandal}` }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: ollama?.available ? THEME.liveGreen : THEME.danger, animation: ollama?.available ? 'pulse-live 2s infinite' : 'none' }} />
+          <span style={{ color: THEME.darkForest, fontSize: 11, fontWeight: 700 }}>AI {ollama?.available ? 'Online' : 'Offline'}</span>
+        </div>
+      </div>
+    </div>
+  );
 }

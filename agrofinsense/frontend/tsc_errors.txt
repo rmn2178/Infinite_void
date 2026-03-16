@@ -1,0 +1,25 @@
+src/components/AppShell.tsx(90,94): error TS2339: Property 'available' does not exist on type 'OllamaStatus'.
+src/components/AppShell.tsx(90,166): error TS2339: Property 'available' does not exist on type 'OllamaStatus'.
+src/components/AppShell.tsx(91,85): error TS2339: Property 'available' does not exist on type 'OllamaStatus'.
+src/lib/externalApis.ts(29,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/pages/LoginPage.tsx(4,10): error TS2614: Module '"../api"' has no exported member 'checkOllamaStatus'. Did you mean to use 'import checkOllamaStatus from "../api"' instead?
+src/pages/LoginPage.tsx(137,87): error TS2339: Property 'available' does not exist on type '{}'.
+src/pages/LoginPage.tsx(137,150): error TS2339: Property 'available' does not exist on type '{}'.
+src/pages/LoginPage.tsx(138,96): error TS2339: Property 'available' does not exist on type '{}'.
+src/pages/PriceGraphPage.tsx(85,68): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: Props): YAxis', gave the following error.
+    Object literal may only specify known properties, and 'fontVariantNumeric' does not exist in type 'SVGProps<SVGTextElement> | ReactElement<SVGElement, string | JSXElementConstructor<any>> | ((props: any) => ReactElement<...>)'.
+  Overload 2 of 2, '(props: Props, context: any): YAxis', gave the following error.
+    Object literal may only specify known properties, and 'fontVariantNumeric' does not exist in type 'SVGProps<SVGTextElement> | ReactElement<SVGElement, string | JSXElementConstructor<any>> | ((props: any) => ReactElement<...>)'.
+src/pages/PriceGraphPage.tsx(100,82): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: Props): XAxis', gave the following error.
+    Object literal may only specify known properties, and 'fontVariantNumeric' does not exist in type 'SVGProps<SVGTextElement> | ReactElement<SVGElement, string | JSXElementConstructor<any>> | ((props: any) => ReactElement<...>)'.
+  Overload 2 of 2, '(props: Props, context: any): XAxis', gave the following error.
+    Object literal may only specify known properties, and 'fontVariantNumeric' does not exist in type 'SVGProps<SVGTextElement> | ReactElement<SVGElement, string | JSXElementConstructor<any>> | ((props: any) => ReactElement<...>)'.
+src/pages/SchemeStatsPage.tsx(30,80): error TS2551: Property 'MossDark' does not exist on type '{ darkForest: string; warmSandal: string; emeraldDark: string; deepSandal: string; lightSandal: string; darkJungle: string; nearBlack: string; creamWhite: string; mossDark: string; jingleGreen: string; ... 5 more ...; liveRed: string; }'. Did you mean 'mossDark'?
+src/pages/SoilUploadPage.tsx(76,39): error TS2345: Argument of type 'string' is not assignable to parameter of type '"gemma3:4b" | "llama3.2:3b"'.
+src/pages/StoreMapPage.tsx(76,13): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+src/pages/StoreMapPage.tsx(76,14): error TS2786: 'Map' cannot be used as a JSX component.
+  Its type 'MapConstructor' is not a valid JSX element type.
+    Type 'MapConstructor' is not assignable to type 'new (props: any, deprecatedLegacyContext?: any) => Component<any, any, any>'.
+      Type 'Map<any, any>' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, render, and 3 more.

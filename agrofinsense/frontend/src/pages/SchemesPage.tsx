@@ -1,73 +1,114 @@
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
+import { THEME } from '../theme';
 import { useStore } from '../store';
-import { getFarmerSchemes, listSchemes } from '../api';
+import { checkSchemeEligibility, getFarmerSchemes } from '../api';
+import { LightCard, SandalCard } from '../components/Cards';
+import { CheckCircle2, XCircle, AlertCircle, FileText, IndianRupee, Clock } from 'lucide-react';
 
-export default function SchemesPage() {
-    const { farmer } = useStore();
-    const farmerId = farmer?.farmer_id || 1;
+export function SchemesPage() {
+  const { farmer } = useStore();
+  const [eligibility, setEligibility] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    const { data: eligibility } = useQuery({
-        queryKey: ['farmerSchemes', farmerId],
-        queryFn: () => getFarmerSchemes(farmerId),
-    });
+  useEffect(() => {
+    if (farmer) {
+      checkSchemeEligibility(farmer.farmer_id)
+        .then(res => setEligibility(res.eligible_schemes || []))
+        .catch(() => setEligibility([]))
+        .finally(() => setLoading(false));
+    }
+  }, [farmer]);
 
-    const { data: allSchemes } = useQuery({
-        queryKey: ['allSchemes'],
-        queryFn: () => listSchemes(),
-    });
+  const stats = [
+    { label: 'Eligible Schemes', val: eligibility.filter(s => s.status === 'Eligible').length, icon: <CheckCircle2 size={20} color={THEME.liveGreen} /> },
+    { label: 'Missing Info', val: eligibility.filter(s => s.status === 'Missing Data').length, icon: <AlertCircle size={20} color={THEME.warning} /> },
+    { label: 'Not Eligible', val: eligibility.filter(s => s.status === 'Not Eligible').length, icon: <XCircle size={20} color={THEME.danger} /> }
+  ];
 
-    const eligible = eligibility?.filter((s: { eligible: boolean }) => s.eligible) || [];
-    const totalBenefit = eligible.reduce((sum: number, s: { benefit_amount: number }) => sum + s.benefit_amount, 0);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: 24 }}>
+      <div style={{ color: THEME.jingleGreen, fontSize: 24, fontWeight: 700 }}>📋 Scheme Eligibility Check</div>
 
-    return (
-        <div className="min-h-screen p-6" id="schemes-page">
-            <h1 className="text-2xl font-bold text-white mb-2">📋 Government Schemes</h1>
-            <p className="text-slate-400 text-sm mb-6">
-                You are eligible for <span className="text-agro-400 font-semibold">{eligible.length} schemes</span> with total benefit of{' '}
-                <span className="text-agro-400 font-semibold">₹{totalBenefit.toLocaleString('en-IN')}</span>
-            </p>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: THEME.mossDark, fontWeight: 600 }}>Checking eligibility...</div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            {stats.map((s, i) => (
+              <LightCard key={i} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: THEME.lightSandal, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {s.icon}
+                </div>
+                <div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: THEME.jingleGreen, fontVariantNumeric: 'tabular-nums' }}>{s.val}</div>
+                  <div style={{ fontSize: 12, color: THEME.mossDark, fontWeight: 600 }}>{s.label}</div>
+                </div>
+              </LightCard>
+            ))}
+          </div>
 
-            {/* Eligibility Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                {eligibility?.map((scheme: { scheme_name: string; eligible: boolean; benefit_amount: number; reason: string }, i: number) => (
-                    <div key={i} className={`glass-card border ${scheme.eligible ? 'border-agro-500/30' : 'border-slate-700/30 opacity-60'
-                        }`}>
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-white font-semibold">{scheme.scheme_name}</h3>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${scheme.eligible
-                                    ? 'bg-agro-600/20 text-agro-400'
-                                    : 'bg-red-600/20 text-red-400'
-                                }`}>
-                                {scheme.eligible ? '✓ Eligible' : '✗ Not Eligible'}
-                            </span>
-                        </div>
-                        {scheme.eligible && (
-                            <p className="text-2xl font-bold text-agro-400 mb-2">
-                                ₹{scheme.benefit_amount.toLocaleString('en-IN')}
-                            </p>
-                        )}
-                        <p className="text-xs text-slate-400">{scheme.reason}</p>
+          <LightCard>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {eligibility.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 20, color: THEME.mossDark }}>No schemes found for your profile.</div>
+              ) : (
+                eligibility.map((s, i) => (
+                  <SandalCard key={i} style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: 20 }}>
+                    <div style={{ marginTop: 4 }}>
+                      {s.status === 'Eligible' ? <CheckCircle2 size={24} color={THEME.liveGreen} /> :
+                       s.status === 'Missing Data' ? <AlertCircle size={24} color={THEME.warning} /> :
+                       <XCircle size={24} color={THEME.danger} />}
                     </div>
-                ))}
-            </div>
+                    
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: THEME.jingleGreen }}>{s.scheme_name}</div>
+                        <span style={{ 
+                          background: s.status === 'Eligible' ? THEME.liveGreen+'20' : s.status === 'Missing Data' ? THEME.warning+'30' : THEME.liveRed+'20', 
+                          color: s.status === 'Eligible' ? THEME.darkForest : s.status === 'Missing Data' ? '#856404' : THEME.danger,
+                          padding: '4px 12px', borderRadius: 12, fontSize: 12, fontWeight: 700
+                        }}>
+                          {s.status}
+                        </span>
+                      </div>
 
-            {/* All Schemes Reference */}
-            <h2 className="text-xl font-bold text-white mb-4">📚 All Available Schemes</h2>
-            <div className="space-y-3">
-                {allSchemes?.map((scheme: { name: string; description: string; criteria: string; benefit: string; ministry: string }, i: number) => (
-                    <div key={i} className="glass-card">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-white font-semibold">{scheme.name}</h3>
-                            <span className="text-xs px-2 py-1 bg-gov-600/20 text-gov-400 rounded-full">{scheme.ministry}</span>
+                      <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: THEME.mossDark, fontWeight: 500 }}>
+                          <IndianRupee size={16} /> Max Benefit: ₹{s.max_benefit_rs.toLocaleString()}
                         </div>
-                        <p className="text-sm text-slate-300 mb-2">{scheme.description}</p>
-                        <div className="flex gap-4 text-xs">
-                            <span className="text-slate-400">Criteria: <span className="text-slate-300">{scheme.criteria}</span></span>
-                            <span className="text-agro-400 font-semibold">Benefit: {scheme.benefit}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: THEME.mossDark, fontWeight: 500 }}>
+                          <Clock size={16} /> Est. Process Time: 14 Days
                         </div>
+                      </div>
+
+                      {s.reasons && s.reasons.length > 0 && (
+                        <div style={{ background: THEME.creamWhite, padding: 12, borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: THEME.darkForest, marginBottom: 6 }}>Reasoning:</div>
+                          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, color: THEME.mossDark }}>
+                            {s.reasons.map((r: string, idx: number) => <li key={idx} style={{ marginBottom: 4 }}>{r}</li>)}
+                          </ul>
+                        </div>
+                      )}
+
+                      {s.status === 'Eligible' && (
+                        <button style={{ background: THEME.darkForest, color: THEME.creamWhite, border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, marginTop: 16, cursor: 'pointer' }}>
+                          Apply Now (e-Sevai)
+                        </button>
+                      )}
+                      
+                      {s.status === 'Missing Data' && (
+                        <button style={{ background: THEME.warmSandal, color: THEME.darkForest, border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, marginTop: 16, cursor: 'pointer' }}>
+                          Upload Missing Docs
+                        </button>
+                      )}
                     </div>
-                ))}
+                  </SandalCard>
+                ))
+              )}
             </div>
-        </div>
-    );
+          </LightCard>
+        </>
+      )}
+    </div>
+  );
 }
